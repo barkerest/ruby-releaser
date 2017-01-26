@@ -4,35 +4,69 @@
 # This script is just a simple method to automate revision bumping and tag creation for ruby based projects.
 #
 # The basic motivation was wanting something similar to rake release for use when I don't want to create a gem file.
-# In this case, we have +git-release+.
+# In this case, we have +git-release+.  Usage can be shown by running +git-release -help+.
+#
+# The project must have a git repo.  The repo should contain either +./version.rb+, +./lib/{project_name}/version.rb+,
+# or +./config/version.rb+.  This file should have a module (name doesn't matter and a single line within the module
+# defining the VERSION constant to a string.  The string should be in "major.minor.revision" format.
+#
+# The module should not contain any other code.  Nothing should appear before or after the module definition either.
+# This file should only be used to define the version.
+#
+# This script can also execute +rake release+ if the +-gem+ option is provided.
+#
+# In essence, this script replaces several commands.
+#   {increment version}
+#   bundle
+#   git add -A
+#   git commit -am {message}
+#
+#
 class Release
+
+  BadOption = Class.new(StandardError)
+  TagExists = Class.new(StandardError)
 
   def initialize(args = [])
     @type = :revision
     @rake_release = false
     @perform = true
+    @message = nil
 
     args ||= []
 
+    up_next = nil
+
     args.each do |arg|
-      opt = arg.to_s.downcase
-      if opt == '-major'
-        @type = :major
-      elsif opt == '-minor'
-        @type = :minor
-      elsif opt == '-revision'
-        @type = :revision
-      elsif opt == '-gem'
-        @rake_release = true
-      elsif opt == '-none'
-        @type = :no_change
-      elsif opt == '-pretend'
-        @perform = false
-      elsif Dir.exist?(arg)
-        Dir.chdir arg
+      if up_next
+        up_next.call arg
+        up_next = nil
       else
-        Release.help
+        opt = arg.to_s.downcase
+        if opt == '-major'
+          @type = :major
+        elsif opt == '-minor'
+          @type = :minor
+        elsif opt == '-revision'
+          @type = :revision
+        elsif opt == '-gem'
+          @rake_release = true
+        elsif opt == '-none'
+          @type = :no_change
+        elsif opt == '-pretend'
+          @perform = false
+        elsif opt == '-path'
+          up_next = Proc.new { |path| Dir.chdir(path) }
+        elsif @message.nil?
+          @message = arg
+        else
+          raise BadOption, "Unknown parameter: #{arg}"
+        end
       end
+    end
+
+    if up_next
+      raise BadOption, 'Missing parameter option.'
     end
 
     @root_path = `git rev-parse --show-toplevel`.to_s.partition("\n")[0].to_s.strip
@@ -54,17 +88,18 @@ class Release
   end
 
   def self.help
-    puts <<-EOH
-Usage: #{$0} [path] [-major|-minor|-revision] [-gem]
-  If a path is specified, it should be the root of a project to release.
-  -major     Increments the major version number    (ie - 1.0.0 => 2.0.0)
-  -minor     Increments the minor version number    (ie - 1.0.0 => 1.1.0)
-  -revision  Increments the revision version number (ie - 1.0.0 => 1.0.1)
-  -none      Do not change the version number       (ie - 1.0.0 => 1.0.0)
-             The default is to increment the revision.
-  -gem       Pushes the gem to rubygems.org.
-  -pretend   Do not make any changes.
-    EOH
+    puts <<-EOHELP
+Usage: #{$0} [message] [-path path] [-major|-minor|-revision] [-gem]
+  If no message is specified, it defaults to 'major|minor|revision version increment'.
+  -path path  Sets the root path to work in.  This must have a git repo.
+  -major      Increments the major version number    (ie - 1.0.0 => 2.0.0)
+  -minor      Increments the minor version number    (ie - 1.0.0 => 1.1.0)
+  -revision   Increments the revision version number (ie - 1.0.0 => 1.0.1)
+  -none       Do not change the version number       (ie - 1.0.0 => 1.0.0)
+              The default is to increment the revision.
+  -gem        Pushes the gem to rubygems.org.
+  -pretend    Do not make any changes.
+    EOHELP
   end
 
   def run
@@ -108,7 +143,7 @@ Usage: #{$0} [path] [-major|-minor|-revision] [-gem]
   private
 
   def version_regex
-    /^(?<PREFIX>.*module\s+[A-Za-z0-9_]+\s+VERSION\s*=\s*)['"](?<VALUE>[^'"]*)['"](?<POSTFIX>\s+end\s*)$/
+    /^(?<PREFIX>\s*module\s+[A-Za-z0-9_]+\s+VERSION\s*=\s*)['"](?<VALUE>[^'"]*)['"](?<POSTFIX>\s+end\s*)$/
   end
 
   def get_version
@@ -144,23 +179,30 @@ Usage: #{$0} [path] [-major|-minor|-revision] [-gem]
       puts "Creating tag #{tag}."
       if @perform
         `git add -A`
-        `git commit -am "#{message}"`
+        `git commit -am "#{@message || message}"`
         `git push`
         `git tag -a "#{tag}" -m "#{message}"`
         `git push origin "#{tag}"`
       end
     else
       # this should only occur with the -none flag.
-      puts "Tag #{tag} already exists."
+      raise TagExists
     end
   end
 
 end
 
 if $0==__FILE__
-  if %w(-h /? /h /help -help --help).include?($1.to_s.downcase)
+  if %w(-h -? /? /h /help -help --help).include?($1.to_s.downcase)
     Release.help
   else
-    Release.new(ARGV).run
+    begin
+      Release.new(ARGV).run
+    rescue Release::BadOption => ex
+      puts 'ERROR: ' + ex.message
+      Release.help
+    rescue Release::TagExists
+      puts 'There is already a tag in the git repo for this version.'
+    end
   end
 end
