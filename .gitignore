@@ -1,0 +1,7 @@
+.bundle/
+log/*.log
+pkg/
+config/*.yml
+.idea/
+**/.DS_Store
+**/.byebug*
