@@ -1,5 +1,10 @@
 #!/usr/bin/env ruby
 
+##
+# This script is just a simple method to automate revision bumping and tag creation for ruby based projects.
+#
+# The basic motivation was wanting something similar to rake release for use when I don't want to create a gem file.
+# In this case, we have +git-release+.
 class Release
 
   def initialize(args = [])
