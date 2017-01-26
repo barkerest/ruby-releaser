@@ -4,7 +4,7 @@ class Release
 
   def initialize(args = [])
     @type = :revision
-    @push = false
+    @rake_release = false
     @perform = true
 
     args ||= []
@@ -18,7 +18,7 @@ class Release
       elsif opt == '-revision'
         @type = :revision
       elsif opt == '-gem'
-        @push = true
+        @rake_release = true
       elsif opt == '-none'
         @type = :no_change
       elsif opt == '-pretend'
@@ -80,12 +80,24 @@ Usage: #{$0} [path] [-major|-minor|-revision] [-gem]
     puts "Version #{orig_m}.#{orig_n}.#{orig_r} => #{m}.#{n}.#{r}"
     set_version m, n, r
 
-    # create tag
+    # update gemfile.lock
+    begin
+      `bundle` if @perform
+    rescue
+      nil # no errors if bundle fails or doesn't exist.
+    end
 
-    # push to git
+    # create tag
+    create_tag m, n, r
 
     # rake release
-
+    if @rake_release
+      begin
+        `rake release` if @perform
+      rescue
+        puts "Failed to perform 'rake release'."
+      end
+    end
   end
 
   private
@@ -111,8 +123,31 @@ Usage: #{$0} [path] [-major|-minor|-revision] [-gem]
 
   def create_tag(major, minor, revision)
     tag = "v#{major}.#{minor}.#{revision}"
+    message = case @type
+                when :major
+                  'major version increment'
+                when :minor
+                  'minor version increment'
+                when :revision
+                  'revision increment'
+                else
+                  'creating tag for version'
+              end
 
-
+    existing = `git tag -l "#{tag}"`.to_s.partition("\n")[0].to_s.strip
+    if existing == ''
+      puts "Creating tag #{tag}."
+      if @perform
+        `git add -A`
+        `git commit -am "#{message}"`
+        `git push`
+        `git tag -a "#{tag}" -m "#{message}"`
+        `git push origin "#{tag}"`
+      end
+    else
+      # this should only occur with the -none flag.
+      puts "Tag #{tag} already exists."
+    end
   end
 
 end
