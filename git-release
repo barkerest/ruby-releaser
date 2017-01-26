@@ -107,8 +107,11 @@ Usage: #{$0} [message] [-path path] [-major|-minor|-revision] [-gem]
     m,n,r = orig_m, orig_n, orig_r
     if @type == :major
       m += 1
+      n = 0
+      r = 0
     elsif @type == :minor
       n += 1
+      r = 0
     elsif @type == :revision
       r += 1
     end
