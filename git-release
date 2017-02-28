@@ -26,6 +26,7 @@ class Release
 
   BadOption = Class.new(StandardError)
   TagExists = Class.new(StandardError)
+  ShowHelp = Class.new(StandardError)
 
   def initialize(args = [])
     @type = :revision
@@ -43,24 +44,29 @@ class Release
         up_next = nil
       else
         opt = arg.to_s.downcase
-        if opt == '-major'
-          @type = :major
-        elsif opt == '-minor'
-          @type = :minor
-        elsif opt == '-revision'
-          @type = :revision
-        elsif opt == '-gem'
-          @rake_release = true
-        elsif opt == '-none'
-          @type = :no_change
-        elsif opt == '-pretend'
-          @perform = false
-        elsif opt == '-path'
-          up_next = Proc.new { |path| Dir.chdir(path) }
-        elsif @message.nil?
-          @message = arg
-        else
-          raise BadOption, "Unknown parameter: #{arg}"
+	case opt
+          when '-major'
+            @type = :major
+          when '-minor'
+            @type = :minor
+          when '-revision'
+            @type = :revision
+          when '-gem'
+            @rake_release = true
+          when '-none'
+            @type = :no_change
+          when '-pretend'
+            @perform = false
+          when '-path'
+            up_next = Proc.new { |path| Dir.chdir(path) }
+	  when '-h', '-?', '/?', '/h', '-help', '--help', '/help'
+            raise ShowHelp
+          else
+            if @message.nil?
+              @message = arg
+            else
+              raise BadOption, "Unknown parameter: #{arg}"
+            end
         end
       end
     end
@@ -196,16 +202,14 @@ Usage: #{$0} [message] [-path path] [-major|-minor|-revision] [-gem]
 end
 
 if $0==__FILE__
-  if %w(-h -? /? /h /help -help --help).include?($1.to_s.downcase)
+  begin
+    Release.new(ARGV).run
+  rescue Release::ShowHelp
     Release.help
-  else
-    begin
-      Release.new(ARGV).run
-    rescue Release::BadOption => ex
-      puts 'ERROR: ' + ex.message
-      Release.help
-    rescue Release::TagExists
-      puts 'There is already a tag in the git repo for this version.'
-    end
+  rescue Release::BadOption => ex
+    puts 'ERROR: ' + ex.message
+    Release.help
+  rescue Release::TagExists
+    puts 'There is already a tag in the git repo for this version.'
   end
 end
