@@ -87,12 +87,12 @@ class Release
         # MSYS mapping C:/ to /c/
         # MSYS git will return paths starting with /c/ but Ruby-w32 or Ruby-w64 doesn't 
         # recognize those paths, so we need to convert them.
-        @root_path.gsub(/^\/(A-Z)\//i, '\1:/'),
+        @root_path.gsub(/^\/([A-Z])\//i, '\1:/'),
         # WSL mapping C:/ to /mnt/c/
         # This should be less of an issue because the Ruby installation running the git command
         # should be running in the WSL environment.  However, since it is theoretically possible
         # to have a /mnt/c/ path we want to offer the conversion here as well.
-        @root_path.gsub(/^\/mnt\/(A-Z)\//i, '\1:/'),
+        @root_path.gsub(/^\/mnt\/([A-Z])\//i, '\1:/'),
     ].each do |root|
         @config_locations += [
             "#{root}/version.rb",
