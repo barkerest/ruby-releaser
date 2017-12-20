@@ -156,7 +156,7 @@ Usage: #{$0} [message] [-path path] [-major|-minor|-revision] [-gem]
     # rake release
     if @rake_release
       begin
-        `bundle exec rake release` if @perform
+        system 'bundle exec rake release' if @perform
       rescue
         puts "Failed to perform 'rake release'."
       end
